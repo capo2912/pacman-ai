@@ -1,1 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Pac-Man with Solana</title>
+  <style>
+    /* Reset */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    /* Body Styles */
+    body {
+      background: #222;
+      color: #fff;
+      font-family: sans-serif;
+      text-align: center;
+    }
+
+    h1 {
+      margin: 20px 0 10px;
+    }
+
+    p {
+      margin-bottom: 20px;
+      color: #ccc;
+    }
+
+    /* Canvas Styles */
+    #gameCanvas {
+      display: block;
+      margin: 0 auto 20px;
+      background: #000;
+      border: 2px solid #fff;
+    }
+
+    /* Victory Message Popup */
+    #winMessage {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -200%);
+      background: rgba(0, 0, 0, 0.8);
+      border: 2px solid #0aff66;
+      border-radius: 10px;
+      padding: 30px;
+      opacity: 0;
+      transition: all 0.8s ease;
+      z-index: 999; /* Ensure it's on top of the canvas */
+    }
+
+    #winMessage h2 {
+      color: #0aff66;
+      font-size: 2rem;
+      margin-bottom: 15px;
+    }
+
+    #winMessage p {
+      color: #fff;
+      font-size: 1.2rem;
+    }
+
+    /* Show message when 'show' class is added */
+    #winMessage.show {
+      transform: translate(-50%, -50%);
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <h1>Pac-Man with Solana</h1>
+  <p>Use the arrow keys to move Pac-Man and collect all the crypto coins. Once you collect them all, you earn 1 SOL!</p>
+
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+  <!-- Victory Popup -->
+  <div id="winMessage">
+    <h2>Congratulations!</h2>
+    <p>You have earned <strong>1 SOL</strong>!</p>
+  </div>
+
+  <script>
+    // ============
+    // CANVAS SETUP
+    // ============
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // ============
+    // PAC-MAN DATA
+    // ============
+    const pacman = {
+      x: canvas.width / 2,
+      y: canvas.height / 2,
+      radius: 20,
+      speed: 4,
+      directionX: 0,
+      directionY: 0,
+      mouthAngle: 0
+    };
+
+    // ==================
+    // CRYPTO COINS ARRAY
+    // ==================
+    // Example set: 5 coins (BTC, ETH, BNB, DOGE, SOL).
+    // You can modify the positions, colors, etc.
+    const coins = [
+      { x: 100, y: 100, color: '#F7931A', taken: false, name: 'BTC' },
+      { x: 700, y: 100, color: '#62688F', taken: false, name: 'ETH' },
+      { x: 100, y: 500, color: '#3C3C3D', taken: false, name: 'BNB' },
+      { x: 700, y: 500, color: '#FECA57', taken: false, name: 'DOGE' },
+      { x: 400, y: 300, color: '#9945FF', taken: false, name: 'SOL' }
+    ];
+
+    // =====================
+    // VICTORY MESSAGE DIV
+    // =====================
+    const winMessage = document.getElementById('winMessage');
+
+    // =================
+    // KEYBOARD CONTROLS
+    // =================
+    document.addEventListener('keydown', (e) => {
+      switch (e.key) {
+        case 'ArrowUp':
+          pacman.directionY = -1;
+          pacman.directionX = 0;
+          break;
+        case 'ArrowDown':
+          pacman.directionY = 1;
+          pacman.directionX = 0;
+          break;
+        case 'ArrowLeft':
+          pacman.directionX = -1;
+          pacman.directionY = 0;
+          break;
+        case 'ArrowRight':
+          pacman.directionX = 1;
+          pacman.directionY = 0;
+          break;
+      }
+    });
+
+    // ===========================
+    // UPDATE PAC-MAN'S MOVEMENTS
+    // ===========================
+    function updatePacman() {
+      pacman.x += pacman.directionX * pacman.speed;
+      pacman.y += pacman.directionY * pacman.speed;
+
+      // Boundaries (avoid leaving canvas)
+      if (pacman.x - pacman.radius < 0) {
+        pacman.x = pacman.radius;
+      }
+      if (pacman.x + pacman.radius > canvas.width) {
+        pacman.x = canvas.width - pacman.radius;
+      }
+      if (pacman.y - pacman.radius < 0) {
+        pacman.y = pacman.radius;
+      }
+      if (pacman.y + pacman.radius > canvas.height) {
+        pacman.y = canvas.height - pacman.radius;
+      }
+
+      // Simple mouth animation
+      pacman.mouthAngle += 0.1;
+    }
+
+    // ===================
+    // DRAW PAC-MAN (ARC)
+    // ===================
+    function drawPacman() {
+      ctx.beginPath();
+
+      // Mouth "openness"
+      const mouthOpen = Math.abs(Math.sin(pacman.mouthAngle)) * 0.25;
+
+      // Adjust rotation based on direction
+      let rotation = 0;
+      if (pacman.directionX === 1) rotation = 0;              // right
+      if (pacman.directionX === -1) rotation = Math.PI;       // left
+      if (pacman.directionY === -1) rotation = -Math.PI / 2;  // up
+      if (pacman.directionY === 1) rotation = Math.PI / 2;    // down
+
+      // Arc angles
+      const startAngle = rotation + mouthOpen;
+      const endAngle = rotation + (2 * Math.PI - mouthOpen);
+
+      ctx.arc(pacman.x, pacman.y, pacman.radius, startAngle, endAngle, false);
+      ctx.lineTo(pacman.x, pacman.y);
+      ctx.fillStyle = 'yellow';
+      ctx.fill();
+      ctx.closePath();
+    }
+
+    // ==============================
+    // DRAW CRYPTO COINS (CIRCLES)
+    // ==============================
+    function drawCoins() {
+      coins.forEach((coin) => {
+        if (!coin.taken) {
+          ctx.beginPath();
+          ctx.arc(coin.x, coin.y, 10, 0, Math.PI * 2);
+          ctx.fillStyle = coin.color;
+          ctx.fill();
+          ctx.closePath();
+        }
+      });
+    }
+
+    // ===================================
+    // CHECK COLLISIONS (PAC-MAN & COINS)
+    // ===================================
+    function checkCollisions() {
+      coins.forEach((coin) => {
+        if (!coin.taken) {
+          const dx = pacman.x - coin.x;
+          const dy = pacman.y - coin.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+
+          // If distance is less than their combined radii, it's collected
+          if (distance < pacman.radius + 10) {
+            coin.taken = true;
+            checkWinCondition();
+          }
+        }
+      });
+    }
+
+    // =========================
+    // CHECK IF THE PLAYER WON
+    // =========================
+    function checkWinCondition() {
+      const allCollected = coins.every(c => c.taken === true);
+      if (allCollected) {
+        // Show victory message
+        winMessage.classList.add('show');
+      }
+    }
+
+    // =====================
+    // MAIN GAME LOOP
+    // =====================
+    function gameLoop() {
+      // Clear canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Update logic
+      updatePacman();
+      checkCollisions();
+
+      // Draw
+      drawPacman();
+      drawCoins();
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    // Start the game
+    gameLoop();
+  </script>
+</body>
+</html>
 
