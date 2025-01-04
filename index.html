@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Pac-Man Mini-Game with Ghost</title>
+  <title>Pac-Man with Obstacles</title>
   <style>
     /* Basic Reset */
     * {
@@ -10,7 +10,6 @@
       margin: 0;
       padding: 0;
     }
-
     body {
       background: #222;
       color: #fff;
@@ -18,16 +17,13 @@
       text-align: center;
       overflow: hidden;
     }
-
     h1 {
       margin: 20px 0 10px;
     }
-
     p {
       margin-bottom: 20px;
       color: #ccc;
     }
-
     /* Canvas */
     #gameCanvas {
       background: #000;
@@ -35,7 +31,6 @@
       display: block;
       margin: 0 auto 20px;
     }
-
     /* Popups */
     .popup {
       position: absolute;
@@ -52,18 +47,15 @@
       transition: all 0.8s ease;
       z-index: 999;
     }
-
     .popup h2 {
       margin-bottom: 15px;
       color: #0aff66;
     }
-
     .popup p {
       color: #fff;
       margin-bottom: 15px;
       font-size: 1.1rem;
     }
-
     .popup button {
       padding: 8px 16px;
       background: #0aff66;
@@ -73,12 +65,10 @@
       font-weight: bold;
       color: #000;
     }
-
     .popup.show {
       transform: translate(-50%, -50%);
       opacity: 1;
     }
-
     /* Specific styling for Game Over popup */
     #gameOverPopup {
       border-color: #ff4a4a;
@@ -89,8 +79,8 @@
   </style>
 </head>
 <body>
-  <h1>Pac-Man Mini-Game (with Ghost)</h1>
-  <p>Use the Arrow Keys to move Pac-Man. Collect all coins for 1 SOL, but watch out for the ghost!</p>
+  <h1>Pac-Man with Obstacles and Ghost</h1>
+  <p>Use Arrow Keys to move. Collect all coins, avoid the Ghost, and navigate around obstacles!</p>
 
   <!-- Canvas -->
   <canvas id="gameCanvas" width="800" height="600"></canvas>
@@ -98,25 +88,28 @@
   <!-- Win Popup -->
   <div id="winPopup" class="popup">
     <h2>Congratulations!</h2>
-    <p>You collected all coins and earned <strong>1 SOL</strong>!</p>
+    <p>You collected all coins and avoided the Ghost!</p>
     <button onclick="reloadGame()">Play Again</button>
   </div>
 
   <!-- Game Over Popup -->
   <div id="gameOverPopup" class="popup">
     <h2>Game Over!</h2>
-    <p>The ghost caught you!</p>
+    <p>The Ghost caught you.</p>
     <button onclick="reloadGame()">Try Again</button>
   </div>
 
   <script>
-    // ================
-    // CANVAS SETUP
-    // ================
+    // ==============================
+    // 1) CANVAS SETUP
+    // ==============================
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
 
-    // Pac-Man data
+    // ==============================
+    // 2) GAME OBJECTS
+    // ==============================
+    // Pac-Man
     const pacman = {
       x: canvas.width / 2,
       y: canvas.height / 2,
@@ -127,17 +120,18 @@
       mouthAngle: 0
     };
 
-    // Ghost data
+    // Ghost
     const ghost = {
-      x: 100, // initial ghost position
+      x: 100,
       y: 100,
       radius: 20,
-      speed: 2,      // slower or faster than Pac-Man
-      dirX: 1,       // initial direction
+      speed: 2,
+      dirX: 1,
       dirY: 0
     };
 
-    // Coins (more than in the simple version)
+    // Coins
+    // Spread them out, or place them strategically
     const coins = [
       { x: 50,  y: 50,  taken: false },
       { x: 750, y: 50,  taken: false },
@@ -151,22 +145,32 @@
     ];
     const coinRadius = 10;
 
-    // UI elements
+    // Obstacles (rectangles) - Example: 4 walls or blocks
+    // You can add or adjust these as you like
+    const obstacles = [
+      // x, y, width, height
+      { x: 250, y: 150, width: 100, height: 20 },
+      { x: 450, y: 150, width: 100, height: 20 },
+      { x: 250, y: 430, width: 300, height: 20 },
+      { x: 100, y: 300, width: 80,  height: 20 }
+    ];
+
+    // Popups
     const winPopup = document.getElementById('winPopup');
     const gameOverPopup = document.getElementById('gameOverPopup');
 
-    // ================
-    // KEYBOARD EVENTS
-    // ================
+    // ==============================
+    // 3) KEYBOARD CONTROLS
+    // ==============================
     document.addEventListener('keydown', (e) => {
       switch (e.key) {
         case 'ArrowUp':
-          pacman.dirY = -1;
           pacman.dirX = 0;
+          pacman.dirY = -1;
           break;
         case 'ArrowDown':
-          pacman.dirY = 1;
           pacman.dirX = 0;
+          pacman.dirY = 1;
           break;
         case 'ArrowLeft':
           pacman.dirX = -1;
@@ -179,15 +183,19 @@
       }
     });
 
-    // =========================
-    // UPDATE AND DRAW FUNCTIONS
-    // =========================
+    // ==============================
+    // 4) UPDATE & DRAW FUNCTIONS
+    // ==============================
     function updatePacman() {
+      // Store old position
+      const oldX = pacman.x;
+      const oldY = pacman.y;
+
       // Move Pac-Man
       pacman.x += pacman.dirX * pacman.speed;
       pacman.y += pacman.dirY * pacman.speed;
 
-      // Bounds checking
+      // Keep Pac-Man in bounds
       if (pacman.x - pacman.radius < 0) {
         pacman.x = pacman.radius;
       }
@@ -201,21 +209,25 @@
         pacman.y = canvas.height - pacman.radius;
       }
 
-      // Animate mouth
+      // Check obstacle collision. If collide, revert position.
+      if (checkObstacleCollision(pacman)) {
+        pacman.x = oldX;
+        pacman.y = oldY;
+      }
+
+      // Pac-Man mouth animation
       pacman.mouthAngle += 0.1;
     }
 
     function drawPacman() {
       ctx.beginPath();
-      // Mouth open factor
       const mouthOpen = Math.abs(Math.sin(pacman.mouthAngle)) * 0.25;
-
-      // Determine rotation based on direction
       let rotation = 0;
-      if (pacman.dirX === 1) rotation = 0;              // right
-      if (pacman.dirX === -1) rotation = Math.PI;       // left
-      if (pacman.dirY === -1) rotation = -Math.PI / 2;  // up
-      if (pacman.dirY === 1) rotation = Math.PI / 2;    // down
+
+      if (pacman.dirX === 1) rotation = 0;              // Right
+      if (pacman.dirX === -1) rotation = Math.PI;       // Left
+      if (pacman.dirY === -1) rotation = -Math.PI / 2;  // Up
+      if (pacman.dirY === 1) rotation = Math.PI / 2;    // Down
 
       const startAngle = rotation + mouthOpen;
       const endAngle   = rotation + (2 * Math.PI - mouthOpen);
@@ -227,15 +239,16 @@
       ctx.closePath();
     }
 
-    // ===============
-    // GHOST FUNCTIONS
-    // ===============
     function updateGhost() {
+      // Store old position
+      const oldX = ghost.x;
+      const oldY = ghost.y;
+
       // Move ghost
       ghost.x += ghost.dirX * ghost.speed;
       ghost.y += ghost.dirY * ghost.speed;
 
-      // Check bounds (if ghost hits edges, reverse direction)
+      // Bounce off canvas edges
       if (ghost.x - ghost.radius < 0) {
         ghost.x = ghost.radius;
         ghost.dirX *= -1;
@@ -253,21 +266,27 @@
         ghost.dirY *= -1;
       }
 
-      // Occasionally change direction randomly
+      // Check obstacle collision. If collide, revert & choose new direction
+      if (checkObstacleCollision(ghost)) {
+        ghost.x = oldX;
+        ghost.y = oldY;
+        chooseRandomDirection(ghost);
+      }
+
+      // Randomly change direction
       if (Math.random() < 0.01) {
         chooseRandomDirection(ghost);
       }
     }
 
     function drawGhost() {
-      // Draw a simple circle for the ghost
       ctx.beginPath();
       ctx.arc(ghost.x, ghost.y, ghost.radius, 0, Math.PI * 2);
       ctx.fillStyle = 'red';
       ctx.fill();
       ctx.closePath();
 
-      // Add two white "eyes"
+      // Ghost eyes
       ctx.beginPath();
       ctx.arc(ghost.x - ghost.radius / 3, ghost.y - ghost.radius / 3, 5, 0, Math.PI * 2);
       ctx.arc(ghost.x + ghost.radius / 3, ghost.y - ghost.radius / 3, 5, 0, Math.PI * 2);
@@ -276,21 +295,44 @@
       ctx.closePath();
     }
 
-    function chooseRandomDirection(obj) {
-      const directions = [
-        { x: 1,  y: 0 },
-        { x: -1, y: 0 },
-        { x: 0,  y: 1 },
-        { x: 0,  y: -1 },
-      ];
-      const r = Math.floor(Math.random() * directions.length);
-      obj.dirX = directions[r].x;
-      obj.dirY = directions[r].y;
+    // ==============================
+    // 5) OBSTACLES
+    // ==============================
+    function drawObstacles() {
+      ctx.fillStyle = 'blue';
+      obstacles.forEach(obs => {
+        ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+      });
     }
 
-    // ====================
-    // COINS / COLLISIONS
-    // ====================
+    function checkObstacleCollision(obj) {
+      // We'll treat obj (Pac-Man/Ghost) as a circle vs. rectangles
+      for (let obs of obstacles) {
+        if (circleRectOverlap(obj.x, obj.y, obj.radius, obs.x, obs.y, obs.width, obs.height)) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    // Basic circle-rectangle collision check
+    function circleRectOverlap(cx, cy, cr, rx, ry, rw, rh) {
+      // Closest point in rectangle to the circle
+      const closestX = clamp(cx, rx, rx + rw);
+      const closestY = clamp(cy, ry, ry + rh);
+      const distX = cx - closestX;
+      const distY = cy - closestY;
+      const distSqr = distX * distX + distY * distY;
+      return distSqr < cr * cr;
+    }
+
+    function clamp(val, min, max) {
+      return Math.max(min, Math.min(max, val));
+    }
+
+    // ==============================
+    // 6) COINS / COLLISIONS
+    // ==============================
     function drawCoins() {
       coins.forEach((coin) => {
         if (!coin.taken) {
@@ -315,7 +357,6 @@
     }
 
     function checkWinCondition() {
-      // If all coins are taken, show Win popup
       const allTaken = coins.every(c => c.taken === true);
       if (allTaken) {
         showWin();
@@ -330,20 +371,31 @@
       }
     }
 
-    // ====================
-    // HELPER FUNCTIONS
-    // ====================
+    // ==============================
+    // 7) HELPER FUNCTIONS
+    // ==============================
     function distance(x1, y1, x2, y2) {
       const dx = x2 - x1;
       const dy = y2 - y1;
-      return Math.sqrt(dx*dx + dy*dy);
+      return Math.sqrt(dx * dx + dy * dy);
     }
 
-    // ========================
-    // GAME LOOP / MAIN LOGIC
-    // ========================
+    function chooseRandomDirection(obj) {
+      const directions = [
+        { x: 1,  y: 0 },
+        { x: -1, y: 0 },
+        { x: 0,  y: 1 },
+        { x: 0,  y: -1 }
+      ];
+      const r = Math.floor(Math.random() * directions.length);
+      obj.dirX = directions[r].x;
+      obj.dirY = directions[r].y;
+    }
+
+    // ==============================
+    // 8) MAIN GAME LOOP
+    // ==============================
     function gameLoop() {
-      // Clear
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       // Update
@@ -354,27 +406,25 @@
       checkWinCondition();
 
       // Draw
+      drawObstacles();
+      drawCoins();
       drawPacman();
       drawGhost();
-      drawCoins();
 
       requestAnimationFrame(gameLoop);
     }
 
-    // Start the game
-    gameLoop();
+    gameLoop(); // Start
 
-    // ===============
-    // POPUP HANDLERS
-    // ===============
+    // ==============================
+    // 9) POPUPS / RELOAD
+    // ==============================
     function showWin() {
       winPopup.classList.add('show');
     }
-
     function showGameOver() {
       gameOverPopup.classList.add('show');
     }
-
     function reloadGame() {
       window.location.reload();
     }
