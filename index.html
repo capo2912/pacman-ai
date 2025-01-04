@@ -2,457 +2,264 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Advanced Pac-Man Demo</title>
+  <title>Pac-Man with Solana</title>
   <style>
-    /* Basic reset */
+    /* Reset */
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
     }
 
+    /* Body Styles */
     body {
       background: #222;
       color: #fff;
       font-family: sans-serif;
       text-align: center;
-      overflow: hidden; /* We'll place the canvas, popups, etc. */
     }
 
     h1 {
       margin: 20px 0 10px;
     }
+
     p {
-      color: #ccc;
       margin-bottom: 20px;
+      color: #ccc;
     }
 
-    /* Center the canvas */
-    #gameContainer {
-      display: inline-block;
-      position: relative;
-    }
-
+    /* Canvas Styles */
     #gameCanvas {
-      background: #000;
       display: block;
+      margin: 0 auto 20px;
+      background: #000;
       border: 2px solid #fff;
     }
 
-    /* Pop-ups for WIN or GAME OVER */
-    .popup {
+    /* Victory Message Popup */
+    #winMessage {
       position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -200%);
-      background: rgba(0,0,0,0.8);
+      background: rgba(0, 0, 0, 0.8);
       border: 2px solid #0aff66;
       border-radius: 10px;
       padding: 30px;
-      width: 300px;
       opacity: 0;
       transition: all 0.8s ease;
-      z-index: 999;
+      z-index: 999; /* Ensure it's on top of the canvas */
     }
-    .popup h2 {
-      margin-bottom: 15px;
+
+    #winMessage h2 {
       color: #0aff66;
+      font-size: 2rem;
+      margin-bottom: 15px;
     }
-    .popup p {
-      font-size: 1.1rem;
-      margin-bottom: 10px;
+
+    #winMessage p {
+      color: #fff;
+      font-size: 1.2rem;
     }
-    .popup.show {
+
+    /* Show message when 'show' class is added */
+    #winMessage.show {
       transform: translate(-50%, -50%);
       opacity: 1;
-    }
-    /* Different border for Game Over popup */
-    #gameOverPopup {
-      border-color: #ff4a4a;
-    }
-    #gameOverPopup h2 {
-      color: #ff4a4a;
     }
   </style>
 </head>
 <body>
-  <h1>Pac-Man Maze: Advanced Version</h1>
-  <p>Use Arrow Keys to move. Avoid ghosts, collect all coins to win!</p>
+  <h1>Pac-Man with Solana</h1>
+  <p>Use the arrow keys to move Pac-Man and collect all the crypto coins. Once you collect them all, you earn 1 SOL!</p>
 
-  <div id="gameContainer">
-    <canvas id="gameCanvas" width="600" height="300"></canvas>
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
 
-    <!-- Win Popup -->
-    <div id="winPopup" class="popup">
-      <h2>You Win!</h2>
-      <p>All coins collected!</p>
-      <button onclick="reloadGame()">Play Again</button>
-    </div>
-
-    <!-- Game Over Popup -->
-    <div id="gameOverPopup" class="popup">
-      <h2>Game Over!</h2>
-      <p>A ghost got you!</p>
-      <button onclick="reloadGame()">Try Again</button>
-    </div>
+  <!-- Victory Popup -->
+  <div id="winMessage">
+    <h2>Congratulations!</h2>
+    <p>You have earned <strong>1 SOL</strong>!</p>
   </div>
 
   <script>
-    /***********************************************
-     * 1) GAME MAP (Tile-based)
-     ***********************************************/
-    /*
-      We'll define a small map using characters:
-        W = Wall
-        . = Coin
-        P = Pac-Man's starting position
-        G = Ghost's starting position
-        ' ' (space) = Empty path
-      Each tile is 30×30 pixels in this example.
-    */
-    const tileSize = 30;
-    const mapData = [
-      "WWWWWWWWWWWW",
-      "W..........GW",
-      "W.WWW.WWW.W.W",
-      "W.W.......W.W",
-      "W.WWWW.WWW.WW",
-      "WP.....G...WW",
-      "WWWWWWWWWWWWWW"
-      //  (Each row has 12 characters, 7 rows total in this example)
-      //  The canvas will be 12 * 30 = 360 wide, 7 * 30 = 210 high.
-      //  But we've set our canvas to 600x300 for demonstration.
-      //  We'll scale or just center the map in the canvas.
-    ];
+    // ============
+    // CANVAS SETUP
+    // ============
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
 
-    // We'll get the actual rows/cols from the data:
-    const rows = mapData.length;
-    const cols = mapData[0].length;
-
-    // The canvas element
-    const canvas = document.getElementById("gameCanvas");
-    const ctx = canvas.getContext("2d");
-
-    // Because the canvas is 600x300 but our map is 360x210 in tile space,
-    // let's define an offset so we can center it in the canvas.
-    const mapWidth = cols * tileSize;   // 12 * 30 = 360
-    const mapHeight = rows * tileSize;  // 7 * 30 = 210
-    const offsetX = (canvas.width - mapWidth) / 2; // e.g. (600 - 360) / 2 = 120
-    const offsetY = (canvas.height - mapHeight) / 2; // e.g. (300 - 210) / 2 = 45
-
-    /***********************************************
-     * 2) GAME OBJECTS: Pac-Man, Ghosts, Coins, etc.
-     ***********************************************/
-    let pacman = {
-      x: 0,
-      y: 0,
-      speed: 2,     // Movement in pixels per frame
-      dirX: 0,
-      dirY: 0,
-      radius: tileSize / 2 * 0.8, // a bit smaller than 1 tile
+    // ============
+    // PAC-MAN DATA
+    // ============
+    const pacman = {
+      x: canvas.width / 2,
+      y: canvas.height / 2,
+      radius: 20,
+      speed: 4,
+      directionX: 0,
+      directionY: 0,
       mouthAngle: 0
     };
 
-    // We'll store ghosts in an array; they also have positions, speeds, directions
-    const ghosts = [];
-    // We'll keep track of coin positions in an array of {x, y, taken}
-    let coins = [];
+    // ==================
+    // CRYPTO COINS ARRAY
+    // ==================
+    // Example set: 5 coins (BTC, ETH, BNB, DOGE, SOL).
+    // You can modify the positions, colors, etc.
+    const coins = [
+      { x: 100, y: 100, color: '#F7931A', taken: false, name: 'BTC' },
+      { x: 700, y: 100, color: '#62688F', taken: false, name: 'ETH' },
+      { x: 100, y: 500, color: '#3C3C3D', taken: false, name: 'BNB' },
+      { x: 700, y: 500, color: '#FECA57', taken: false, name: 'DOGE' },
+      { x: 400, y: 300, color: '#9945FF', taken: false, name: 'SOL' }
+    ];
 
-    // We'll parse mapData to fill pacman, ghosts, coins, walls
-    const walls = [];  // each wall is {x, y, w, h}
-    function initMap() {
-      for (let row = 0; row < rows; row++) {
-        for (let col = 0; col < cols; col++) {
-          const tile = mapData[row][col];
-          const tileX = offsetX + col * tileSize;
-          const tileY = offsetY + row * tileSize;
+    // =====================
+    // VICTORY MESSAGE DIV
+    // =====================
+    const winMessage = document.getElementById('winMessage');
 
-          if (tile === "W") {
-            // It's a wall
-            walls.push({ x: tileX, y: tileY, w: tileSize, h: tileSize });
-          } else if (tile === "P") {
-            // Pac-Man start
-            pacman.x = tileX + tileSize / 2;
-            pacman.y = tileY + tileSize / 2;
-          } else if (tile === "G") {
-            // Ghost start
-            ghosts.push({
-              x: tileX + tileSize / 2,
-              y: tileY + tileSize / 2,
-              speed: 1.5,  // slightly slower or you can adjust
-              dirX: 0,
-              dirY: 0,
-              radius: tileSize / 2 * 0.8
-            });
-          } 
-          
-          // If it's ".", add a coin
-          if (tile === ".") {
-            coins.push({
-              x: tileX + tileSize / 2,
-              y: tileY + tileSize / 2,
-              taken: false,
-              radius: tileSize * 0.15
-            });
-          }
-        }
-      }
-    }
-
-    // Initialize the map objects
-    initMap();
-
-    /***********************************************
-     * 3) KEYBOARD EVENTS
-     ***********************************************/
+    // =================
+    // KEYBOARD CONTROLS
+    // =================
     document.addEventListener('keydown', (e) => {
       switch (e.key) {
         case 'ArrowUp':
-          pacman.dirX = 0;
-          pacman.dirY = -1;
+          pacman.directionY = -1;
+          pacman.directionX = 0;
           break;
         case 'ArrowDown':
-          pacman.dirX = 0;
-          pacman.dirY = 1;
+          pacman.directionY = 1;
+          pacman.directionX = 0;
           break;
         case 'ArrowLeft':
-          pacman.dirX = -1;
-          pacman.dirY = 0;
+          pacman.directionX = -1;
+          pacman.directionY = 0;
           break;
         case 'ArrowRight':
-          pacman.dirX = 1;
-          pacman.dirY = 0;
+          pacman.directionX = 1;
+          pacman.directionY = 0;
           break;
       }
     });
 
-    /***********************************************
-     * 4) GAME LOGIC: Movement, Collisions, etc.
-     ***********************************************/
+    // ===========================
+    // UPDATE PAC-MAN'S MOVEMENTS
+    // ===========================
     function updatePacman() {
-      // Store old position
-      const oldX = pacman.x;
-      const oldY = pacman.y;
+      pacman.x += pacman.directionX * pacman.speed;
+      pacman.y += pacman.directionY * pacman.speed;
 
-      // Move
-      pacman.x += pacman.dirX * pacman.speed;
-      pacman.y += pacman.dirY * pacman.speed;
-
-      // Check wall collisions (simple approach: revert if touching wall)
-      if (checkWallCollision(pacman)) {
-        // revert to old position
-        pacman.x = oldX;
-        pacman.y = oldY;
+      // Boundaries (avoid leaving canvas)
+      if (pacman.x - pacman.radius < 0) {
+        pacman.x = pacman.radius;
+      }
+      if (pacman.x + pacman.radius > canvas.width) {
+        pacman.x = canvas.width - pacman.radius;
+      }
+      if (pacman.y - pacman.radius < 0) {
+        pacman.y = pacman.radius;
+      }
+      if (pacman.y + pacman.radius > canvas.height) {
+        pacman.y = canvas.height - pacman.radius;
       }
 
-      // Animate mouth
+      // Simple mouth animation
       pacman.mouthAngle += 0.1;
     }
 
-    function updateGhosts() {
-      ghosts.forEach((ghost) => {
-        // Move ghost
-        const oldX = ghost.x;
-        const oldY = ghost.y;
-        ghost.x += ghost.dirX * ghost.speed;
-        ghost.y += ghost.dirY * ghost.speed;
+    // ===================
+    // DRAW PAC-MAN (ARC)
+    // ===================
+    function drawPacman() {
+      ctx.beginPath();
 
-        // If the ghost hits a wall, pick a new random direction
-        if (checkWallCollision(ghost)) {
-          ghost.x = oldX;
-          ghost.y = oldY;
-          chooseRandomDirection(ghost);
-        }
+      // Mouth "openness"
+      const mouthOpen = Math.abs(Math.sin(pacman.mouthAngle)) * 0.25;
 
-        // Low chance (e.g. 1%) each frame to change direction randomly
-        if (Math.random() < 0.01) {
-          chooseRandomDirection(ghost);
-        }
-      });
+      // Adjust rotation based on direction
+      let rotation = 0;
+      if (pacman.directionX === 1) rotation = 0;              // right
+      if (pacman.directionX === -1) rotation = Math.PI;       // left
+      if (pacman.directionY === -1) rotation = -Math.PI / 2;  // up
+      if (pacman.directionY === 1) rotation = Math.PI / 2;    // down
+
+      // Arc angles
+      const startAngle = rotation + mouthOpen;
+      const endAngle = rotation + (2 * Math.PI - mouthOpen);
+
+      ctx.arc(pacman.x, pacman.y, pacman.radius, startAngle, endAngle, false);
+      ctx.lineTo(pacman.x, pacman.y);
+      ctx.fillStyle = 'yellow';
+      ctx.fill();
+      ctx.closePath();
     }
 
-    function checkCoins() {
-      coins.forEach((coin) => {
-        if (!coin.taken) {
-          const dist = distance(pacman.x, pacman.y, coin.x, coin.y);
-          if (dist < pacman.radius + coin.radius) {
-            coin.taken = true;
-          }
-        }
-      });
-    }
-
-    function checkGhostCollision() {
-      // If a ghost is close enough to Pac-Man => game over
-      for (let g of ghosts) {
-        const dist = distance(pacman.x, pacman.y, g.x, g.y);
-        if (dist < pacman.radius + g.radius * 0.8) {
-          // Ghost caught Pac-Man
-          showGameOver();
-        }
-      }
-    }
-
-    function checkWinCondition() {
-      // If all coins are taken, you win
-      const allTaken = coins.every(c => c.taken === true);
-      if (allTaken) {
-        showWin();
-      }
-    }
-
-    /***********************************************
-     * 5) HELPER FUNCTIONS
-     ***********************************************/
-    function checkWallCollision(obj) {
-      // We'll treat obj as a circle, walls as squares.
-      for (let w of walls) {
-        // If the circle is overlapping the rectangle, collision
-        if (circleRectOverlap(obj.x, obj.y, obj.radius, w.x, w.y, w.w, w.h)) {
-          return true;
-        }
-      }
-      return false;
-    }
-
-    function circleRectOverlap(cx, cy, cr, rx, ry, rw, rh) {
-      // Find the closest point to the circle on the rectangle
-      const closestX = clamp(cx, rx, rx + rw);
-      const closestY = clamp(cy, ry, ry + rh);
-      const distX = cx - closestX;
-      const distY = cy - closestY;
-      const distanceSq = distX * distX + distY * distY;
-      return distanceSq < (cr * cr);
-    }
-
-    function clamp(val, min, max) {
-      return Math.max(min, Math.min(max, val));
-    }
-
-    function distance(x1, y1, x2, y2) {
-      const dx = x2 - x1;
-      const dy = y2 - y1;
-      return Math.sqrt(dx*dx + dy*dy);
-    }
-
-    // Random direction for ghosts: either up, down, left, or right
-    function chooseRandomDirection(ghost) {
-      const dirs = [
-        {x:1, y:0}, {x:-1, y:0}, 
-        {x:0, y:1}, {x:0, y:-1}
-      ];
-      const r = Math.floor(Math.random() * dirs.length);
-      ghost.dirX = dirs[r].x;
-      ghost.dirY = dirs[r].y;
-    }
-
-    /***********************************************
-     * 6) DRAWING FUNCTIONS
-     ***********************************************/
-    function drawMap() {
-      // Draw walls as blue squares (for clarity)
-      ctx.fillStyle = "blue";
-      walls.forEach((w) => {
-        ctx.fillRect(w.x, w.y, w.w, w.h);
-      });
-    }
-
+    // ==============================
+    // DRAW CRYPTO COINS (CIRCLES)
+    // ==============================
     function drawCoins() {
-      // Draw coins as small circles
       coins.forEach((coin) => {
         if (!coin.taken) {
           ctx.beginPath();
-          ctx.arc(coin.x, coin.y, coin.radius, 0, Math.PI * 2);
-          ctx.fillStyle = "gold";
+          ctx.arc(coin.x, coin.y, 10, 0, Math.PI * 2);
+          ctx.fillStyle = coin.color;
           ctx.fill();
           ctx.closePath();
         }
       });
     }
 
-    function drawPacman() {
-      ctx.beginPath();
-      // The mouth "open" factor
-      const mouthOpen = Math.abs(Math.sin(pacman.mouthAngle)) * 0.25;
+    // ===================================
+    // CHECK COLLISIONS (PAC-MAN & COINS)
+    // ===================================
+    function checkCollisions() {
+      coins.forEach((coin) => {
+        if (!coin.taken) {
+          const dx = pacman.x - coin.x;
+          const dy = pacman.y - coin.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
 
-      // Determine rotation based on direction
-      let rotation = 0;
-      if (pacman.dirX === 1) rotation = 0;                  // right
-      if (pacman.dirX === -1) rotation = Math.PI;           // left
-      if (pacman.dirY === -1) rotation = -Math.PI / 2;      // up
-      if (pacman.dirY === 1) rotation = Math.PI / 2;        // down
-
-      const startAngle = rotation + mouthOpen;
-      const endAngle = rotation + (2 * Math.PI - mouthOpen);
-
-      ctx.arc(pacman.x, pacman.y, pacman.radius, startAngle, endAngle, false);
-      ctx.lineTo(pacman.x, pacman.y);
-      ctx.fillStyle = "yellow";
-      ctx.fill();
-      ctx.closePath();
-    }
-
-    function drawGhosts() {
-      ghosts.forEach((g) => {
-        ctx.beginPath();
-        // simple circle for ghost body
-        ctx.arc(g.x, g.y, g.radius, 0, Math.PI, true); // half-circle
-        ctx.fillStyle = "red";
-        ctx.fill();
-        ctx.closePath();
-
-        // eyes (just a quick illustration)
-        ctx.beginPath();
-        ctx.arc(g.x - g.radius/3, g.y - g.radius/2, g.radius/6, 0, Math.PI*2);
-        ctx.arc(g.x + g.radius/3, g.y - g.radius/2, g.radius/6, 0, Math.PI*2);
-        ctx.fillStyle = "#fff";
-        ctx.fill();
-        ctx.closePath();
+          // If distance is less than their combined radii, it's collected
+          if (distance < pacman.radius + 10) {
+            coin.taken = true;
+            checkWinCondition();
+          }
+        }
       });
     }
 
-    /***********************************************
-     * 7) MAIN LOOP
-     ***********************************************/
+    // =========================
+    // CHECK IF THE PLAYER WON
+    // =========================
+    function checkWinCondition() {
+      const allCollected = coins.every(c => c.taken === true);
+      if (allCollected) {
+        // Show victory message
+        winMessage.classList.add('show');
+      }
+    }
+
+    // =====================
+    // MAIN GAME LOOP
+    // =====================
     function gameLoop() {
       // Clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Update objects
+      // Update logic
       updatePacman();
-      updateGhosts();
-      checkCoins();
-      checkGhostCollision();
-      checkWinCondition();
+      checkCollisions();
 
       // Draw
-      drawMap();
-      drawCoins();
       drawPacman();
-      drawGhosts();
+      drawCoins();
 
       requestAnimationFrame(gameLoop);
     }
 
-    // Start
+    // Start the game
     gameLoop();
-
-    /***********************************************
-     * 8) GAME OVER / WIN UI
-     ***********************************************/
-    const winPopup = document.getElementById("winPopup");
-    const gameOverPopup = document.getElementById("gameOverPopup");
-
-    function showWin() {
-      winPopup.classList.add("show");
-    }
-    function showGameOver() {
-      gameOverPopup.classList.add("show");
-    }
-    // Reload the page to start over
-    function reloadGame() {
-      window.location.reload();
-    }
   </script>
 </body>
 </html>
