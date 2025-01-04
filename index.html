@@ -1,49 +1,256 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <title>Pac-Man AI con Cryptos</title>
+  <meta charset="UTF-8" />
+  <title>Pac-Man con Solana</title>
   <style>
-    /* Estilos básicos para centrar el canvas y poner un fondo */
-    body {
+    /* RESET BÁSICO */
+    * {
+      box-sizing: border-box;
       margin: 0;
       padding: 0;
-      background: #333;
+    }
+    body {
+      background: #222;
       color: #fff;
       font-family: sans-serif;
       text-align: center;
     }
     h1 {
-      margin-top: 20px;
+      margin: 20px 0 10px;
+    }
+    p {
+      margin-bottom: 20px;
+      color: #ccc;
     }
     #gameCanvas {
-      background: #000; /* Fondo negro para el juego */
-      display: block;
-      margin: 20px auto;
+      background: #000;
       border: 2px solid #fff;
+      display: block;
+      margin: 0 auto 20px;
+    }
+    /* MENSAJE DE VICTORIA */
+    #winMessage {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -200%);
+      background: rgba(0, 0, 0, 0.8);
+      padding: 30px;
+      border: 2px solid #0aff66;
+      border-radius: 10px;
+      opacity: 0;
+      transition: all 0.8s ease;
+    }
+    #winMessage h2 {
+      margin-bottom: 10px;
+      color: #0aff66;
+      font-size: 2rem;
+    }
+    #winMessage p {
+      margin: 0;
+      color: #fff;
+      font-size: 1.2rem;
+    }
+    /* CUANDO GANA, MOSTRAR ANIMACIÓN */
+    #winMessage.show {
+      transform: translate(-50%, -50%);
+      opacity: 1;
     }
   </style>
 </head>
 <body>
-  <h1>¡Pac-Man AI con Cryptos!</h1>
-  <p>Usa las flechas del teclado para mover a Pac-Man y recoger las monedas cripto.</p>
+  <h1>Pac-Man con Solana</h1>
+  <p>Usa las flechas del teclado para mover a Pac-Man y recoger las monedas cripto. ¡Recoge todas y ganarás 1 SOL!</p>
   <canvas id="gameCanvas" width="800" height="600"></canvas>
 
+  <!-- Mensaje de victoria -->
+  <div id="winMessage">
+    <h2>¡Has ganado!</h2>
+    <p>Recibiste 1 <strong>SOL</strong> por tu logro</p>
+  </div>
+
   <script>
-    // Obtenemos el contexto del canvas
+    // ==========================
+    // CONFIGURACIÓN DEL CANVAS
+    // ==========================
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
 
-    // Variables para Pac-Man
-    let pacman = {
-      x: 400,   // Posición inicial (centro de canvas)
-      y: 300,
+    // ==========================
+    // DATOS DE PAC-MAN
+    // ==========================
+    const pacman = {
+      x: canvas.width / 2,
+      y: canvas.height / 2,
       radius: 20,
       speed: 4,
-      angleOpen: 0,
       directionX: 0,
-      directionY: 0
+      directionY: 0,
+      mouthAngle: 0
     };
 
-    // Array de “monedas” (pellets) con temática cripto
-    // Para un ejemplo s
+    // ==========================
+    // CRIPTOMONEDAS A RECOGER
+    // ==========================
+    //  Ejemplo: 5 monedas, una de ellas es SOL
+    //  Podrías cambiar color, posición y nombre
+    const cryptos = [
+      { x: 100, y: 100, color: '#f7931a', taken: false, nombre: 'BTC' },
+      { x: 700, y: 100, color: '#62688f', taken: false, nombre: 'ETH' },
+      { x: 100, y: 500, color: '#3c3c3d', taken: false, nombre: 'BNB' },
+      { x: 700, y: 500, color: '#feca57', taken: false, nombre: 'DOGE' },
+      { x: 400, y: 300, color: '#9945FF', taken: false, nombre: 'SOL' } // Solana
+    ];
+
+    // ==========================
+    // ELEMENTO MENSAJE (GANAR)
+    // ==========================
+    const winMessage = document.getElementById('winMessage');
+
+    // ==========================
+    // EVENTOS DE TECLADO
+    // ==========================
+    document.addEventListener('keydown', (e) => {
+      switch (e.key) {
+        case 'ArrowUp':
+          pacman.directionY = -1;
+          pacman.directionX = 0;
+          break;
+        case 'ArrowDown':
+          pacman.directionY = 1;
+          pacman.directionX = 0;
+          break;
+        case 'ArrowLeft':
+          pacman.directionX = -1;
+          pacman.directionY = 0;
+          break;
+        case 'ArrowRight':
+          pacman.directionX = 1;
+          pacman.directionY = 0;
+          break;
+      }
+    });
+
+    // ==========================
+    // FUNCIÓN: ACTUALIZAR PAC-MAN
+    // ==========================
+    function updatePacman() {
+      pacman.x += pacman.directionX * pacman.speed;
+      pacman.y += pacman.directionY * pacman.speed;
+
+      // Limites del canvas
+      if (pacman.x - pacman.radius < 0) {
+        pacman.x = pacman.radius;
+      }
+      if (pacman.x + pacman.radius > canvas.width) {
+        pacman.x = canvas.width - pacman.radius;
+      }
+      if (pacman.y - pacman.radius < 0) {
+        pacman.y = pacman.radius;
+      }
+      if (pacman.y + pacman.radius > canvas.height) {
+        pacman.y = canvas.height - pacman.radius;
+      }
+
+      // Pequeña animación de la boca
+      pacman.mouthAngle += 0.1;
+    }
+
+    // ==========================
+    // FUNCIÓN: DIBUJAR PAC-MAN
+    // ==========================
+    function drawPacman() {
+      ctx.beginPath();
+      // Angle de apertura (ajustamos la amplitud)
+      const mouthOpen = Math.abs(Math.sin(pacman.mouthAngle)) * 0.25;
+
+      // Rotación según dirección
+      let rotation = 0;
+      if (pacman.directionX === 1) rotation = 0;              // derecha
+      if (pacman.directionX === -1) rotation = Math.PI;       // izquierda
+      if (pacman.directionY === -1) rotation = -Math.PI / 2;  // arriba
+      if (pacman.directionY === 1) rotation = Math.PI / 2;    // abajo
+
+      // Definir ángulos de inicio/fin del arco
+      const startAngle = rotation + mouthOpen;
+      const endAngle = rotation + (2 * Math.PI - mouthOpen);
+
+      // Arco
+      ctx.arc(pacman.x, pacman.y, pacman.radius, startAngle, endAngle, false);
+      ctx.lineTo(pacman.x, pacman.y);
+      ctx.fillStyle = 'yellow';
+      ctx.fill();
+      ctx.closePath();
+    }
+
+    // ==========================
+    // FUNCIÓN: DIBUJAR CRIPTOS
+    // ==========================
+    function drawCryptos() {
+      cryptos.forEach((coin) => {
+        if (!coin.taken) {
+          ctx.beginPath();
+          ctx.arc(coin.x, coin.y, 10, 0, Math.PI * 2);
+          ctx.fillStyle = coin.color;
+          ctx.fill();
+          ctx.closePath();
+        }
+      });
+    }
+
+    // ==========================
+    // FUNCIÓN: DETECTAR COLISIÓN PAC-MAN / CRIPTOS
+    // ==========================
+    function checkCollisions() {
+      cryptos.forEach((coin) => {
+        if (!coin.taken) {
+          const dx = pacman.x - coin.x;
+          const dy = pacman.y - coin.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+
+          // Checamos si la distancia es menor a la suma de los radios
+          if (distance < pacman.radius + 10) {
+            coin.taken = true;
+            // Verificar si ya se tomaron todas
+            checkIfWin();
+          }
+        }
+      });
+    }
+
+    // ==========================
+    // FUNCIÓN: CHECAR SI GANA
+    // ==========================
+    function checkIfWin() {
+      // Si todas las cryptos se han tomado, desplegamos el mensaje de victoria
+      const allTaken = cryptos.every((c) => c.taken === true);
+      if (allTaken) {
+        // Mostramos animación
+        winMessage.classList.add('show');
+      }
+    }
+
+    // ==========================
+    // BUCLE PRINCIPAL DE JUEGO
+    // ==========================
+    function gameLoop() {
+      // Limpiar el canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Actualizar lógicas
+      updatePacman();
+      checkCollisions();
+
+      // Dibujar
+      drawPacman();
+      drawCryptos();
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    // Iniciamos el juego
+    gameLoop();
+  </script>
+</body>
+</html>
