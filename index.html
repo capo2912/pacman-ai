@@ -2,21 +2,21 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Pac-Man with Solana</title>
+  <title>Pac-Man Mini-Game with Ghost</title>
   <style>
-    /* Reset */
+    /* Basic Reset */
     * {
+      box-sizing: border-box;
       margin: 0;
       padding: 0;
-      box-sizing: border-box;
     }
 
-    /* Body Styles */
     body {
       background: #222;
       color: #fff;
       font-family: sans-serif;
       text-align: center;
+      overflow: hidden;
     }
 
     h1 {
@@ -28,129 +28,166 @@
       color: #ccc;
     }
 
-    /* Canvas Styles */
+    /* Canvas */
     #gameCanvas {
-      display: block;
-      margin: 0 auto 20px;
       background: #000;
       border: 2px solid #fff;
+      display: block;
+      margin: 0 auto 20px;
     }
 
-    /* Victory Message Popup */
-    #winMessage {
+    /* Popups */
+    .popup {
       position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -200%);
-      background: rgba(0, 0, 0, 0.8);
+      width: 300px;
+      background: rgba(0, 0, 0, 0.85);
       border: 2px solid #0aff66;
       border-radius: 10px;
       padding: 30px;
+      text-align: center;
       opacity: 0;
       transition: all 0.8s ease;
-      z-index: 999; /* Ensure it's on top of the canvas */
+      z-index: 999;
     }
 
-    #winMessage h2 {
-      color: #0aff66;
-      font-size: 2rem;
+    .popup h2 {
       margin-bottom: 15px;
+      color: #0aff66;
     }
 
-    #winMessage p {
+    .popup p {
       color: #fff;
-      font-size: 1.2rem;
+      margin-bottom: 15px;
+      font-size: 1.1rem;
     }
 
-    /* Show message when 'show' class is added */
-    #winMessage.show {
+    .popup button {
+      padding: 8px 16px;
+      background: #0aff66;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      color: #000;
+    }
+
+    .popup.show {
       transform: translate(-50%, -50%);
       opacity: 1;
+    }
+
+    /* Specific styling for Game Over popup */
+    #gameOverPopup {
+      border-color: #ff4a4a;
+    }
+    #gameOverPopup h2 {
+      color: #ff4a4a;
     }
   </style>
 </head>
 <body>
-  <h1>Pac-Man with Solana</h1>
-  <p>Use the arrow keys to move Pac-Man and collect all the crypto coins. Once you collect them all, you earn 1 SOL!</p>
+  <h1>Pac-Man Mini-Game (with Ghost)</h1>
+  <p>Use the Arrow Keys to move Pac-Man. Collect all coins for 1 SOL, but watch out for the ghost!</p>
 
+  <!-- Canvas -->
   <canvas id="gameCanvas" width="800" height="600"></canvas>
 
-  <!-- Victory Popup -->
-  <div id="winMessage">
+  <!-- Win Popup -->
+  <div id="winPopup" class="popup">
     <h2>Congratulations!</h2>
-    <p>You have earned <strong>1 SOL</strong>!</p>
+    <p>You collected all coins and earned <strong>1 SOL</strong>!</p>
+    <button onclick="reloadGame()">Play Again</button>
+  </div>
+
+  <!-- Game Over Popup -->
+  <div id="gameOverPopup" class="popup">
+    <h2>Game Over!</h2>
+    <p>The ghost caught you!</p>
+    <button onclick="reloadGame()">Try Again</button>
   </div>
 
   <script>
-    // ============
+    // ================
     // CANVAS SETUP
-    // ============
+    // ================
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
 
-    // ============
-    // PAC-MAN DATA
-    // ============
+    // Pac-Man data
     const pacman = {
       x: canvas.width / 2,
       y: canvas.height / 2,
       radius: 20,
       speed: 4,
-      directionX: 0,
-      directionY: 0,
+      dirX: 0,
+      dirY: 0,
       mouthAngle: 0
     };
 
-    // ==================
-    // CRYPTO COINS ARRAY
-    // ==================
-    // Example set: 5 coins (BTC, ETH, BNB, DOGE, SOL).
-    // You can modify the positions, colors, etc.
+    // Ghost data
+    const ghost = {
+      x: 100, // initial ghost position
+      y: 100,
+      radius: 20,
+      speed: 2,      // slower or faster than Pac-Man
+      dirX: 1,       // initial direction
+      dirY: 0
+    };
+
+    // Coins (more than in the simple version)
     const coins = [
-      { x: 100, y: 100, color: '#F7931A', taken: false, name: 'BTC' },
-      { x: 700, y: 100, color: '#62688F', taken: false, name: 'ETH' },
-      { x: 100, y: 500, color: '#3C3C3D', taken: false, name: 'BNB' },
-      { x: 700, y: 500, color: '#FECA57', taken: false, name: 'DOGE' },
-      { x: 400, y: 300, color: '#9945FF', taken: false, name: 'SOL' }
+      { x: 50,  y: 50,  taken: false },
+      { x: 750, y: 50,  taken: false },
+      { x: 50,  y: 550, taken: false },
+      { x: 750, y: 550, taken: false },
+      { x: 400, y: 100, taken: false },
+      { x: 400, y: 300, taken: false },
+      { x: 400, y: 500, taken: false },
+      { x: 200, y: 300, taken: false },
+      { x: 600, y: 300, taken: false }
     ];
+    const coinRadius = 10;
 
-    // =====================
-    // VICTORY MESSAGE DIV
-    // =====================
-    const winMessage = document.getElementById('winMessage');
+    // UI elements
+    const winPopup = document.getElementById('winPopup');
+    const gameOverPopup = document.getElementById('gameOverPopup');
 
-    // =================
-    // KEYBOARD CONTROLS
-    // =================
+    // ================
+    // KEYBOARD EVENTS
+    // ================
     document.addEventListener('keydown', (e) => {
       switch (e.key) {
         case 'ArrowUp':
-          pacman.directionY = -1;
-          pacman.directionX = 0;
+          pacman.dirY = -1;
+          pacman.dirX = 0;
           break;
         case 'ArrowDown':
-          pacman.directionY = 1;
-          pacman.directionX = 0;
+          pacman.dirY = 1;
+          pacman.dirX = 0;
           break;
         case 'ArrowLeft':
-          pacman.directionX = -1;
-          pacman.directionY = 0;
+          pacman.dirX = -1;
+          pacman.dirY = 0;
           break;
         case 'ArrowRight':
-          pacman.directionX = 1;
-          pacman.directionY = 0;
+          pacman.dirX = 1;
+          pacman.dirY = 0;
           break;
       }
     });
 
-    // ===========================
-    // UPDATE PAC-MAN'S MOVEMENTS
-    // ===========================
+    // =========================
+    // UPDATE AND DRAW FUNCTIONS
+    // =========================
     function updatePacman() {
-      pacman.x += pacman.directionX * pacman.speed;
-      pacman.y += pacman.directionY * pacman.speed;
+      // Move Pac-Man
+      pacman.x += pacman.dirX * pacman.speed;
+      pacman.y += pacman.dirY * pacman.speed;
 
-      // Boundaries (avoid leaving canvas)
+      // Bounds checking
       if (pacman.x - pacman.radius < 0) {
         pacman.x = pacman.radius;
       }
@@ -164,29 +201,24 @@
         pacman.y = canvas.height - pacman.radius;
       }
 
-      // Simple mouth animation
+      // Animate mouth
       pacman.mouthAngle += 0.1;
     }
 
-    // ===================
-    // DRAW PAC-MAN (ARC)
-    // ===================
     function drawPacman() {
       ctx.beginPath();
-
-      // Mouth "openness"
+      // Mouth open factor
       const mouthOpen = Math.abs(Math.sin(pacman.mouthAngle)) * 0.25;
 
-      // Adjust rotation based on direction
+      // Determine rotation based on direction
       let rotation = 0;
-      if (pacman.directionX === 1) rotation = 0;              // right
-      if (pacman.directionX === -1) rotation = Math.PI;       // left
-      if (pacman.directionY === -1) rotation = -Math.PI / 2;  // up
-      if (pacman.directionY === 1) rotation = Math.PI / 2;    // down
+      if (pacman.dirX === 1) rotation = 0;              // right
+      if (pacman.dirX === -1) rotation = Math.PI;       // left
+      if (pacman.dirY === -1) rotation = -Math.PI / 2;  // up
+      if (pacman.dirY === 1) rotation = Math.PI / 2;    // down
 
-      // Arc angles
       const startAngle = rotation + mouthOpen;
-      const endAngle = rotation + (2 * Math.PI - mouthOpen);
+      const endAngle   = rotation + (2 * Math.PI - mouthOpen);
 
       ctx.arc(pacman.x, pacman.y, pacman.radius, startAngle, endAngle, false);
       ctx.lineTo(pacman.x, pacman.y);
@@ -195,64 +227,135 @@
       ctx.closePath();
     }
 
-    // ==============================
-    // DRAW CRYPTO COINS (CIRCLES)
-    // ==============================
+    // ===============
+    // GHOST FUNCTIONS
+    // ===============
+    function updateGhost() {
+      // Move ghost
+      ghost.x += ghost.dirX * ghost.speed;
+      ghost.y += ghost.dirY * ghost.speed;
+
+      // Check bounds (if ghost hits edges, reverse direction)
+      if (ghost.x - ghost.radius < 0) {
+        ghost.x = ghost.radius;
+        ghost.dirX *= -1;
+      }
+      if (ghost.x + ghost.radius > canvas.width) {
+        ghost.x = canvas.width - ghost.radius;
+        ghost.dirX *= -1;
+      }
+      if (ghost.y - ghost.radius < 0) {
+        ghost.y = ghost.radius;
+        ghost.dirY *= -1;
+      }
+      if (ghost.y + ghost.radius > canvas.height) {
+        ghost.y = canvas.height - ghost.radius;
+        ghost.dirY *= -1;
+      }
+
+      // Occasionally change direction randomly
+      if (Math.random() < 0.01) {
+        chooseRandomDirection(ghost);
+      }
+    }
+
+    function drawGhost() {
+      // Draw a simple circle for the ghost
+      ctx.beginPath();
+      ctx.arc(ghost.x, ghost.y, ghost.radius, 0, Math.PI * 2);
+      ctx.fillStyle = 'red';
+      ctx.fill();
+      ctx.closePath();
+
+      // Add two white "eyes"
+      ctx.beginPath();
+      ctx.arc(ghost.x - ghost.radius / 3, ghost.y - ghost.radius / 3, 5, 0, Math.PI * 2);
+      ctx.arc(ghost.x + ghost.radius / 3, ghost.y - ghost.radius / 3, 5, 0, Math.PI * 2);
+      ctx.fillStyle = '#fff';
+      ctx.fill();
+      ctx.closePath();
+    }
+
+    function chooseRandomDirection(obj) {
+      const directions = [
+        { x: 1,  y: 0 },
+        { x: -1, y: 0 },
+        { x: 0,  y: 1 },
+        { x: 0,  y: -1 },
+      ];
+      const r = Math.floor(Math.random() * directions.length);
+      obj.dirX = directions[r].x;
+      obj.dirY = directions[r].y;
+    }
+
+    // ====================
+    // COINS / COLLISIONS
+    // ====================
     function drawCoins() {
       coins.forEach((coin) => {
         if (!coin.taken) {
           ctx.beginPath();
-          ctx.arc(coin.x, coin.y, 10, 0, Math.PI * 2);
-          ctx.fillStyle = coin.color;
+          ctx.arc(coin.x, coin.y, coinRadius, 0, Math.PI * 2);
+          ctx.fillStyle = 'gold';
           ctx.fill();
           ctx.closePath();
         }
       });
     }
 
-    // ===================================
-    // CHECK COLLISIONS (PAC-MAN & COINS)
-    // ===================================
-    function checkCollisions() {
+    function checkCoins() {
       coins.forEach((coin) => {
         if (!coin.taken) {
-          const dx = pacman.x - coin.x;
-          const dy = pacman.y - coin.y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-
-          // If distance is less than their combined radii, it's collected
-          if (distance < pacman.radius + 10) {
+          const dist = distance(pacman.x, pacman.y, coin.x, coin.y);
+          if (dist < pacman.radius + coinRadius) {
             coin.taken = true;
-            checkWinCondition();
           }
         }
       });
     }
 
-    // =========================
-    // CHECK IF THE PLAYER WON
-    // =========================
     function checkWinCondition() {
-      const allCollected = coins.every(c => c.taken === true);
-      if (allCollected) {
-        // Show victory message
-        winMessage.classList.add('show');
+      // If all coins are taken, show Win popup
+      const allTaken = coins.every(c => c.taken === true);
+      if (allTaken) {
+        showWin();
       }
     }
 
-    // =====================
-    // MAIN GAME LOOP
-    // =====================
+    function checkGhostCollision() {
+      // If ghost is close enough to Pac-Man => game over
+      const dist = distance(pacman.x, pacman.y, ghost.x, ghost.y);
+      if (dist < pacman.radius + ghost.radius * 0.7) {
+        showGameOver();
+      }
+    }
+
+    // ====================
+    // HELPER FUNCTIONS
+    // ====================
+    function distance(x1, y1, x2, y2) {
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      return Math.sqrt(dx*dx + dy*dy);
+    }
+
+    // ========================
+    // GAME LOOP / MAIN LOGIC
+    // ========================
     function gameLoop() {
-      // Clear canvas
+      // Clear
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Update logic
+      // Update
       updatePacman();
-      checkCollisions();
+      updateGhost();
+      checkCoins();
+      checkGhostCollision();
+      checkWinCondition();
 
       // Draw
       drawPacman();
+      drawGhost();
       drawCoins();
 
       requestAnimationFrame(gameLoop);
@@ -260,6 +363,21 @@
 
     // Start the game
     gameLoop();
+
+    // ===============
+    // POPUP HANDLERS
+    // ===============
+    function showWin() {
+      winPopup.classList.add('show');
+    }
+
+    function showGameOver() {
+      gameOverPopup.classList.add('show');
+    }
+
+    function reloadGame() {
+      window.location.reload();
+    }
   </script>
 </body>
 </html>
